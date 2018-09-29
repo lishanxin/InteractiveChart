@@ -114,6 +114,8 @@ public class Zoomer {
             return false;
         }
 
+        // 根据时间差tRTC来计算最终的mCurrentZoom，时间差越大，mCurrentZoom就越大；但是如果时间差大于
+        // mAnimationDurationMillis，就返回false，不进行绘制。
         float t = tRTC * 1f / mAnimationDurationMillis;
         mCurrentZoom = mEndZoom * mInterpolator.getInterpolation(t);
         return true;

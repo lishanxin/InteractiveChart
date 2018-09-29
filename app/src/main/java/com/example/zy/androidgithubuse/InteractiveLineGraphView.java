@@ -19,23 +19,25 @@ package com.example.zy.androidgithubuse;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.support.v4.os.ParcelableCompat;
 import android.support.v4.os.ParcelableCompatCreatorCallbacks;
 import android.support.v4.view.GestureDetectorCompat;
 import android.support.v4.view.ViewCompat;
-import android.support.v4.widget.EdgeEffectCompat;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.widget.EdgeEffect;
 import android.widget.OverScroller;
 
 import com.example.android.interactivechart.R;
@@ -64,7 +66,7 @@ import com.example.android.interactivechart.R;
  * The view also demonstrates the correct use of
  * <a href="http://developer.android.com/design/style/touch-feedback.html">touch feedback</a> to
  * indicate to users that they've reached the content edges after a pan or fling gesture. This
- * is done using the {@link EdgeEffectCompat} class.
+ * is done using the {@link EdgeEffect} class.
  * <p>
  * Finally, this class demonstrates the basics of creating a custom view, including support for
  * custom attributes (see the constructors), a simple implementation for
@@ -157,10 +159,10 @@ public class InteractiveLineGraphView extends View {
     private RectF mScrollerStartViewport = new RectF(); // Used only for zooms and flings.
 
     // Edge effect / overscroll tracking objects.
-    private EdgeEffectCompat mEdgeEffectTop;
-    private EdgeEffectCompat mEdgeEffectBottom;
-    private EdgeEffectCompat mEdgeEffectLeft;
-    private EdgeEffectCompat mEdgeEffectRight;
+    private EdgeEffect mEdgeEffectTop;
+    private EdgeEffect mEdgeEffectBottom;
+    private EdgeEffect mEdgeEffectLeft;
+    private EdgeEffect mEdgeEffectRight;
 
     private boolean mEdgeEffectTopActive;
     private boolean mEdgeEffectBottomActive;
@@ -240,10 +242,13 @@ public class InteractiveLineGraphView extends View {
         mZoomer = new Zoomer(context);
 
         // Sets up edge effects
-        mEdgeEffectLeft = new EdgeEffectCompat(context);
-        mEdgeEffectTop = new EdgeEffectCompat(context);
-        mEdgeEffectRight = new EdgeEffectCompat(context);
-        mEdgeEffectBottom = new EdgeEffectCompat(context);
+        mEdgeEffectLeft = new EdgeEffect(context);
+        mEdgeEffectTop = new EdgeEffect(context);
+        mEdgeEffectRight = new EdgeEffect(context);
+        mEdgeEffectBottom = new EdgeEffect(context);
+
+        if (Build.VERSION.SDK_INT >= 21)
+        mEdgeEffectLeft.setColor(Color.argb(255, 124, 23, 123));
     }
 
     /**
@@ -313,19 +318,27 @@ public class InteractiveLineGraphView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
+        //绘制网格与坐标轴刻度。
         // Draws axes and text labels
         drawAxes(canvas);
 
         // Clips the next few drawing operations to the content area
+        //保存绘制状态
         int clipRestoreCount = canvas.save();
+        //此处限制绘制区域
         canvas.clipRect(mContentRect);
 
+        //绘制曲线
         drawDataSeriesUnclipped(canvas);
+        //绘制边缘效果EdgeEffect
         drawEdgeEffectsUnclipped(canvas);
 
         // Removes clipping rectangle
+        //恢复到clipRestoreCount标记的绘制状态，取消绘制区域的限制。
         canvas.restoreToCount(clipRestoreCount);
 
+
+        //绘制黑色边框，显示展示区域
         // Draws chart container
         canvas.drawRect(mContentRect, mAxisPaint);
     }
@@ -337,17 +350,20 @@ public class InteractiveLineGraphView extends View {
         // Computes axis stops (in terms of numerical value and position on screen)
         int i;
 
+        //获取x轴刻度值，存入mXStopsBuffer
         computeAxisStops(
                 mCurrentViewport.left,
                 mCurrentViewport.right,
                 mContentRect.width() / mMaxLabelWidth / 2,
                 mXStopsBuffer);
+        //获取y轴刻度值，存入mYStopsBuffer
         computeAxisStops(
                 mCurrentViewport.top,
                 mCurrentViewport.bottom,
                 mContentRect.height() / mLabelHeight / 2,
                 mYStopsBuffer);
 
+        //增加数组复用，而避免造成不必要的资源分配
         // Avoid unnecessary allocations during drawing. Re-use allocated
         // arrays and only reallocate if the number of stops grows.
         if (mAxisXPositionsBuffer.length < mXStopsBuffer.numStops) {
@@ -365,12 +381,17 @@ public class InteractiveLineGraphView extends View {
 
         // Compute positions
         for (i = 0; i < mXStopsBuffer.numStops; i++) {
+            //计算像素点位置数值，getDrawX传入表格位置数值，输出相对物理屏幕的像素点位置数值。
             mAxisXPositionsBuffer[i] = getDrawX(mXStopsBuffer.stops[i]);
         }
         for (i = 0; i < mYStopsBuffer.numStops; i++) {
+            //计算像素点位置数值，getDrawX传入表格位置数值，输出相对物理屏幕的像素点位置数值。
             mAxisYPositionsBuffer[i] = getDrawY(mYStopsBuffer.stops[i]);
         }
 
+        // 使用canvas.drawLines需传入一个基础数组，长度为4的倍数。从index=0开始，每4个数值表示直线的
+        // 起止点的横纵坐标（正好四个数值）。
+        // 下方绘制了横纵网格。
         // Draws grid lines using drawLines (faster than individual drawLine calls)
         for (i = 0; i < mXStopsBuffer.numStops; i++) {
             mAxisXLinesBuffer[i * 4 + 0] = (float) Math.floor(mAxisXPositionsBuffer[i]);
@@ -388,6 +409,8 @@ public class InteractiveLineGraphView extends View {
         }
         canvas.drawLines(mAxisYLinesBuffer, 0, mYStopsBuffer.numStops * 4, mGridPaint);
 
+
+        //绘制坐标轴刻度
         // Draws X labels
         int labelOffset;
         int labelLength;
@@ -432,15 +455,18 @@ public class InteractiveLineGraphView extends View {
     private static final int POW10[] = {1, 10, 100, 1000, 10000, 100000, 1000000};
 
     /**
+     * 将val按字符的形式存入数组out中，并返回存入字符的个数。
      * Formats a float value to the given number of decimals. Returns the length of the string.
      * The string begins at out.length - [return value].
      */
     private static int formatFloat(final char[] out, float val, int digits) {
         boolean negative = false;
+        //如果val == 0，则直接存入字符'0'，并返回长度1.
         if (val == 0) {
             out[out.length - 1] = '0';
             return 1;
         }
+        //如果val小于0，设置负值表示为true，并取正，方便处理。
         if (val < 0) {
             negative = true;
             val = -val;
@@ -448,20 +474,27 @@ public class InteractiveLineGraphView extends View {
         if (digits > POW10.length) {
             digits = POW10.length - 1;
         }
+        //将小数点移至最右方
         val *= POW10[digits];//ArrayIndexOutOfBoundsException
         long lval = Math.round(val);
         int index = out.length - 1;
         int charCount = 0;
+        //存入数值，如果存入的字符数量小于小数位数+1,（包括小数点），或者剩余的数值不为0，则继续存入
+        // 数值。为了可以兼容计算1.03和0.03
         while (lval != 0 || charCount < (digits + 1)) {
+            //取余，存入
             int digit = (int) (lval % 10);
             lval = lval / 10;
+            //因为存入的是字符形式，所以需要基于字符'0'，才能正确存入字符。（ASCII码）
             out[index--] = (char) (digit + '0');
             charCount++;
+            //到小数的位置时，存入小数点。此处并不是终点，如果小数点前面还有整数，还是继续计算。
             if (charCount == digits) {
                 out[index--] = '.';
                 charCount++;
             }
         }
+        //如果负数标签为true，则存入负号
         if (negative) {
             out[index--] = '-';
             charCount++;
@@ -487,8 +520,12 @@ public class InteractiveLineGraphView extends View {
             return;
         }
 
+        //获取间隔大小
         double rawInterval = range / steps;
+        //对间隔进行取值，保留一位有效数字
         double interval = roundToOneSignificantFigure(rawInterval);
+
+        //下方3句代码不知何用
         double intervalMagnitude = Math.pow(10, (int) Math.log10(interval));
         int intervalSigDigit = (int) (interval / intervalMagnitude);
         if (intervalSigDigit > 5) {
@@ -496,27 +533,34 @@ public class InteractiveLineGraphView extends View {
             interval = Math.floor(10 * intervalMagnitude);
         }
 
+        //根据间隔计算出坐标轴起始刻度值
         double first = Math.ceil(start / interval) * interval;
+        //根据间隔算出坐标轴最后刻度值再加一点点数值
         double last = Math.nextUp(Math.floor(stop / interval) * interval);
 
         double f;
         int i;
         int n = 0;
+        //判断总共有几个刻度值
         for (f = first; f <= last; f += interval) {
             ++n;
         }
 
+        //确定刻度值数量，并保存
         outStops.numStops = n;
 
+        //判断已有数组是否能够囊括所有刻度值，若可以，则不创建新数组
         if (outStops.stops.length < n) {
             // Ensure stops contains at least numStops elements.
             outStops.stops = new float[n];
         }
 
+        //将刻度值存入数组
         for (f = first, i = 0; i < n; f += interval, ++i) {
             outStops.stops[i] = (float) f;
         }
 
+        //小数位数判断，后期将数字转字符数据时使用。
         if (interval < 1) {
             outStops.decimals = (int) Math.ceil(-Math.log10(interval));
         } else {
@@ -548,19 +592,24 @@ public class InteractiveLineGraphView extends View {
      * before calling this method.
      */
     private void drawDataSeriesUnclipped(Canvas canvas) {
+        //初始点
         mSeriesLinesBuffer[0] = mContentRect.left;
         mSeriesLinesBuffer[1] = getDrawY(fun(mCurrentViewport.left));
         mSeriesLinesBuffer[2] = mSeriesLinesBuffer[0];
         mSeriesLinesBuffer[3] = mSeriesLinesBuffer[1];
         float x;
+        //将曲线分成30条直线进行绘制，先计算直线数据。
         for (int i = 1; i <= DRAW_STEPS; i++) {
+            //下一条直线的起点就是上一条直线的终点。
             mSeriesLinesBuffer[i * 4 + 0] = mSeriesLinesBuffer[(i - 1) * 4 + 2];
             mSeriesLinesBuffer[i * 4 + 1] = mSeriesLinesBuffer[(i - 1) * 4 + 3];
 
+            //终点先计算出表格坐标系的x，y；再通过坐标系转换函数，换成像素坐标系的横纵坐标，并存入绘制数据中。
             x = (mCurrentViewport.left + (mCurrentViewport.width() / DRAW_STEPS * i));
             mSeriesLinesBuffer[i * 4 + 2] = getDrawX(x);
             mSeriesLinesBuffer[i * 4 + 3] = getDrawY(fun(x));
         }
+        //进行绘制曲线
         canvas.drawLines(mSeriesLinesBuffer, mDataPaint);
     }
 
@@ -568,11 +617,11 @@ public class InteractiveLineGraphView extends View {
      * Draws the overscroll "glow" at the four edges of the chart region, if necessary. The edges
      * of the chart region are stored in {@link #mContentRect}.
      *
-     * @see EdgeEffectCompat
+     * @see EdgeEffect
      */
     private void drawEdgeEffectsUnclipped(Canvas canvas) {
         // The methods below rotate and translate the canvas as needed before drawing the glow,
-        // since EdgeEffectCompat always draws a top-glow at 0,0.
+        // since EdgeEffect always draws a top-glow at 0,0.
 
         boolean needsInvalidate = false;
 
@@ -631,6 +680,7 @@ public class InteractiveLineGraphView extends View {
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
     /**
+     * 将像素焦点转换为表格坐标点，并存入PointF中。
      * Finds the chart point (i.e. within the chart's domain and range) represented by the
      * given pixel coordinates, if that pixel is within the chart region described by
      * {@link #mContentRect}. If the point is found, the "dest" argument is set to the point and
@@ -851,6 +901,8 @@ public class InteractiveLineGraphView extends View {
                         / mCurrentViewport.height()));
     }
 
+    //每次绘制前会调用此方法，让View重新进行绘制的方法：ViewCompat.postInvalidateOnAnimation(this);
+    // 所以把上述方法注释掉后，computeScroll就不会被执行，也就没有了其他效果。
     @Override
     public void computeScroll() {
         super.computeScroll();
@@ -914,19 +966,26 @@ public class InteractiveLineGraphView extends View {
             // double-touch).
             float newWidth = (1f - mZoomer.getCurrZoom()) * mScrollerStartViewport.width();
             float newHeight = (1f - mZoomer.getCurrZoom()) * mScrollerStartViewport.height();
+
+            //算出放大中点占表格坐标位置比例。
             float pointWithinViewportX = (mZoomFocalPoint.x - mScrollerStartViewport.left)
                     / mScrollerStartViewport.width();
             float pointWithinViewportY = (mZoomFocalPoint.y - mScrollerStartViewport.top)
                     / mScrollerStartViewport.height();
+
+            //存入新的表格坐标范围
             mCurrentViewport.set(
                     mZoomFocalPoint.x - newWidth * pointWithinViewportX,
                     mZoomFocalPoint.y - newHeight * pointWithinViewportY,
                     mZoomFocalPoint.x + newWidth * (1 - pointWithinViewportX),
                     mZoomFocalPoint.y + newHeight * (1 - pointWithinViewportY));
+
+            //限制表格的显示范围
             constrainViewport();
             needsInvalidate = true;
         }
 
+        //开始绘制表格
         if (needsInvalidate) {
             ViewCompat.postInvalidateOnAnimation(this);
         }
@@ -1192,8 +1251,11 @@ public class InteractiveLineGraphView extends View {
      * @see #computeAxisStops
      */
     private static class AxisStops {
+        //保存数据的数组
         float[] stops = new float[]{};
+        //有效的间隔数
         int numStops;
+        //小数位数
         int decimals;
     }
 }
