@@ -808,8 +808,12 @@ public class InteractiveLineGraphView extends View {
              * additional information about the viewport, see the comments for
              * {@link mCurrentViewport}.
              */
+            //表格坐标系上的位移计算
             float viewportOffsetX = distanceX * mCurrentViewport.width() / mContentRect.width();
             float viewportOffsetY = -distanceY * mCurrentViewport.height() / mContentRect.height();
+
+            // 计算出可绘制的表格在像素坐标的尺寸，判断是否可以滑动，可以滑动的话，就让
+            // mEdgeEffectRightActive = true,以启动边界效果。
             computeScrollSurfaceSize(mSurfaceSizeBuffer);
             int scrolledX = (int) (mSurfaceSizeBuffer.x
                     * (mCurrentViewport.left + viewportOffsetX - AXIS_X_MIN)
@@ -821,6 +825,8 @@ public class InteractiveLineGraphView extends View {
                     || mCurrentViewport.right < AXIS_X_MAX;
             boolean canScrollY = mCurrentViewport.top > AXIS_Y_MIN
                     || mCurrentViewport.bottom < AXIS_Y_MAX;
+
+            //设置表格展示区域，并刷新视图。
             setViewportBottomLeft(
                     mCurrentViewport.left + viewportOffsetX,
                     mCurrentViewport.bottom + viewportOffsetY);
@@ -893,6 +899,8 @@ public class InteractiveLineGraphView extends View {
      * is zoomed in 200% in both directions, the returned size will be twice as large horizontally
      * and vertically.
      */
+    // 计算总共可以绘制多大的像素尺寸。假如说表格坐标系，长宽（0.25*0.5）占满了屏幕，那么在像素坐标系
+    // 中要绘制出全部的表格就需要长扩大4倍，宽扩大2倍。
     private void computeScrollSurfaceSize(Point out) {
         out.set(
                 (int) (mContentRect.width() * (AXIS_X_MAX - AXIS_X_MIN)
