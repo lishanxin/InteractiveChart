@@ -33,6 +33,7 @@ import android.support.v4.os.ParcelableCompatCreatorCallbacks;
 import android.support.v4.view.GestureDetectorCompat;
 import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -80,7 +81,7 @@ import com.example.android.interactivechart.R;
  * view's content for vision-impaired users.
  */
 public class InteractiveLineGraphView extends View {
-    private static final String TAG = "InteractiveLineGraphView";
+    private static final String TAG = "InteractiveLineGraph";
 
     /**
      * The number of individual points (samples) in the chart series to draw onscreen.
@@ -855,6 +856,7 @@ public class InteractiveLineGraphView extends View {
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
             fling((int) -velocityX, (int) -velocityY);
+            Log.d(TAG, "onfling_" + "Viewport:" + mCurrentViewport.toString() + "ContentRect:" + mContentRect.toString());
             return true;
         }
     };
@@ -881,6 +883,10 @@ public class InteractiveLineGraphView extends View {
         int startY = (int) (mSurfaceSizeBuffer.y * (AXIS_Y_MAX - mScrollerStartViewport.bottom) / (
                 AXIS_Y_MAX - AXIS_Y_MIN));
         mScroller.forceFinished(true);
+        //OverScroller的方法不好理解，借鉴Scroller方法来理解。此方法通过前六个参数计算出抛物操作最终
+        // 抵达的位置，并存放在mScroller.FinalX与mScroller.FinalY中。在每次Scroller.computeScrollOffset
+        // 进行计算时，会根据FinalX与FinalY及时间差来算出当前位置的CurrX与CurrY，根据这两个数据就可以
+        // 换算出显示的数据，并ondraw出来，进而进行展示在屏幕上。
         mScroller.fling(
                 startX,
                 startY,
@@ -888,8 +894,9 @@ public class InteractiveLineGraphView extends View {
                 velocityY,
                 0, mSurfaceSizeBuffer.x - mContentRect.width(),
                 0, mSurfaceSizeBuffer.y - mContentRect.height(),
-                mContentRect.width() / 2,
-                mContentRect.height() / 2);
+                mContentRect.width()*2,
+                mContentRect.height()*2);
+
         ViewCompat.postInvalidateOnAnimation(this);
     }
 
@@ -909,8 +916,11 @@ public class InteractiveLineGraphView extends View {
                         / mCurrentViewport.height()));
     }
 
-    //每次绘制前会调用此方法，让View重新进行绘制的方法：ViewCompat.postInvalidateOnAnimation(this);
-    // 所以把上述方法注释掉后，computeScroll就不会被执行，也就没有了其他效果。
+    // ViewCompat.postInvalidateOnAnimation(this)会让View进行重新绘制，调用View.draw(，在这个方法里
+    // 面，会调用computeScroll进行滑动状态计算，View.draw完后，就会进行View.onDraw方法调用。
+    // 但是如果在调用computeScroll后，重新调用ViewCompat.postInvalidateOnAnimation(this),那么就会
+    // 在onDraw绘制完后，重新调用View.draw进行重新绘制。
+    // 所以把ViewCompat.postInvalidateOnAnimation(this)方法注释掉后，computeScroll就不会被执行，也就没有了其他效果。
     @Override
     public void computeScroll() {
         super.computeScroll();
@@ -992,7 +1002,7 @@ public class InteractiveLineGraphView extends View {
             constrainViewport();
             needsInvalidate = true;
         }
-
+        Log.d(TAG, "computeScroll--" + "Viewport:" + mCurrentViewport.toString() + "ContentRect:" + mContentRect.toString());
         //开始绘制表格
         if (needsInvalidate) {
             ViewCompat.postInvalidateOnAnimation(this);
